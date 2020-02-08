@@ -1,5 +1,5 @@
 # Running VM on VMM
-release 0.1
+release 0.2 
 ## Overview
 This script is used to create configuration files, which will be used to run VM (Virtual Machines) on Juniper's VMM infastructure.
 
