@@ -67,8 +67,8 @@ There are different arguments required by this script
 - to access the other devices (other than GW), VM GW can be used as jump host, or VM GW can be configured as VPN server using [wireguard](https://www.wireguard.com/install/) or openvpn
  
 ## How to run the script (Step by step)
-- **[Running simple topology](https://github.com/m1r24n/simple_on_vmm/README.md)**
-- **[openstack + Contrail Lab](https://github.com/m1r24n/contrail_on_vmm/README.md)**
-- **[kubernetes + contrail Lab](https://github.com/m1r24n/k8s_contrail_on_vmm/README.md)**
-- **[Healthbot + NS Lab](https://github.com/m1r24n/HB_NS_on_vmm/README.md)**
+- **[Running simple topology](https://github.com/m1r24n/simple_on_vmm)**
+- **[openstack + Contrail Lab](https://github.com/m1r24n/contrail_on_vmm)**
+- **[kubernetes + contrail Lab](https://github.com/m1r24n/k8s_contrail_on_vmm)**
+- **[Healthbot + NS Lab](https://github.com/m1r24n/HB_NS_on_vmm)**
 
