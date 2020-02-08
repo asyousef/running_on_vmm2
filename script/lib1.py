@@ -74,7 +74,6 @@ def checking_config_syntax(d1):
 					print("ERROR for VM ",i)
 					print("duplicate interfaces " + j + " is found")
 					return 0
-
 	return retval
 
 def get_ip(d1,vm):
@@ -208,6 +207,7 @@ def upload(d1):
 	lab_conf.extend(list_bridge(d1))
 	# bridge1=list_bridge(d1)
 	# print("Bridge ",bridge1)
+
 # creating VM configuration
 	for i in d1['vm'].keys():
 		if d1['vm'][i]['type'] == 'gw':
@@ -225,8 +225,8 @@ def upload(d1):
 	f1=param1.tmp_dir + "lab.conf"
 	write_to_file(f1,lab_conf)
 	write_pc_config_to_file(d1)
-	f1=param1.tmp_dir + "resolv.conf"
-	write_to_file(f1,["nameserver 10.49.0.4","nameserver 10.49.0.37"])
+	# f1=param1.tmp_dir + "resolv.conf"
+	# write_to_file(f1,["nameserver 10.49.0.4","nameserver 10.49.0.37"])
 	f1=param1.tmp_dir + "01-ip_forward.conf"
 	line1=["net.ipv4.ip_forward=1"]
 	write_to_file(f1,line1)
@@ -318,7 +318,7 @@ chassis {
          }
       }
     }
-}""" % (d1['vm'][i]['interfaces']['fxp0'][1]) )
+}""" % (d1['vm'][i]['interfaces']['fxp0']['ipv4']) )
 	f1=param1.tmp_dir + i + ".conf"
 	write_to_file(f1,line1)
 
@@ -378,7 +378,7 @@ def write_vqfx_config(d1,i):
          }
       }
     }
-}""" % (d1['vm'][i]['interfaces']['em0'][1]) )
+}""" % (d1['vm'][i]['interfaces']['em0']['ipv4']) )
 	line1.append("""interfaces {
    em1 {
      unit 0 {
@@ -424,19 +424,20 @@ def write_pc_config_to_file(d1):
 			if d1['vm'][i]['os']=='centos':
 				for j in d1['vm'][i]['interfaces']:
 					line1=[]
-					if isinstance(d1['vm'][i]['interfaces'][j],list):
+					if 'ipv4' in d1['vm'][i]['interfaces'][j].keys():
 						intf=j.replace('em','eth')
 						line1.append('NAME=' + intf)
 						line1.append('DEVICE='+intf)
-						if d1['vm'][i]['interfaces'][j][1].split('/')[0] == '0.0.0.0':
-							line1.extend(['TYPE=Ethernet','BOOTPROTO=dhcp','ONBOOT=no'])
-						else:
-							line1.extend(['TYPE=Ethernet','BOOTPROTO=static','ONBOOT=yes'])
-							line1.append('IPADDR=' + d1['vm'][i]['interfaces'][j][1].split('/')[0])
-							line1.append('NETMASK=' + prefix2netmask(d1['vm'][i]['interfaces'][j][1].split('/')[1]))
-							if(len(d1['vm'][i]['interfaces'][j])==3):
-								line1.append('GATEWAY=' + d1['vm'][i]['interfaces'][j][2])
-								hosts_file.append(d1['vm'][i]['interfaces'][j][1].split('/')[0] + ' ' + i)
+						line1.extend(['TYPE=Ethernet','BOOTPROTO=static','ONBOOT=yes'])
+						line1.append('IPADDR=' + d1['vm'][i]['interfaces'][j]['ipv4'].split('/')[0])
+						line1.append('NETMASK=' + prefix2netmask(d1['vm'][i]['interfaces'][j]['ipv4'].split('/')[1]))
+						if 'mtu' in d1['vm'][i]['interfaces'][j].keys():
+							line1.append('MTU=' + str(d1['vm'][i]['interfaces'][j]['mtu']))
+						if 'gateway4' in d1['vm'][i]['interfaces'][j].keys():
+							line1.append('GATEWAY=' + d1['vm'][i]['interfaces'][j]['gateway4'])
+							line1.append('DNS1= 10.49.0.4')
+							line1.append('DNS2= 10.49.0.37')
+							hosts_file.append(d1['vm'][i]['interfaces'][j]['ipv4'].split('/')[0] + ' ' + i)
 						f1=param1.tmp_dir + "ifcfg-" + intf + "." + i
 						write_to_file(f1,line1)
 			elif d1['vm'][i]['os']=='ubuntu':
@@ -444,19 +445,18 @@ def write_pc_config_to_file(d1):
 				line1.append("auto lo")
 				line1.append("iface lo inet loopback")
 				for j in d1['vm'][i]['interfaces']:
-					if isinstance(d1['vm'][i]['interfaces'][j],list):
+					if 'ipv4' in d1['vm'][i]['interfaces'][j].keys():
 						intf=j.replace('em','eth')
-						if d1['vm'][i]['interfaces'][j    ][1].split('/')[0] == '0.0.0.0':
-							line1.append("iface " + intf + " inet dhcp")
-						else:	
-							line1.append("auto " + intf)
-							line1.append("iface " + intf + " inet static")
-							line1.append("    address " + d1['vm'][i]['interfaces'][j][1].split('/')[0])
-							line1.append("    netmask " + prefix2netmask(d1['vm'][i]['interfaces'][j][1].split('/')[1]))
-							if(len(d1['vm'][i]['interfaces'][j])==3):
-								line1.append('   gateway ' + d1['vm'][i]['interfaces'][j][2])
-								line1.append('   dns-nameservers 10.49.0.4 10.49.0.37 ')
-								hosts_file.append(d1['vm'][i]['interfaces'][j][1].split('/')[0] + ' ' + i)
+						line1.append("auto " + intf)
+						line1.append("iface " + intf + " inet static")
+						line1.append("    address " + d1['vm'][i]['interfaces'][j]['ipv4'].split('/')[0])
+						line1.append("    netmask " + prefix2netmask(d1['vm'][i]['interfaces'][j]['ipv4'].split('/')[1]))
+						if 'mtu' in d1['vm'][i]['interfaces'][j].keys():
+							line1.append('	  mtu ' + str(d1['vm'][i]['interfaces'][j]['mtu']))
+						if 'gateway4' in d1['vm'][i]['interfaces'][j].keys():
+							line1.append('   gateway ' + d1['vm'][i]['interfaces'][j]['gateway4'])
+							line1.append('   dns-nameservers 10.49.0.4 10.49.0.37 ')
+							hosts_file.append(d1['vm'][i]['interfaces'][j]['ipv4'].split('/')[0] + ' ' + i)
 				f1=param1.tmp_dir + "interfaces." + i
 				write_to_file(f1,line1)
 	write_to_file(param1.tmp_dir + "hosts",hosts_file)
@@ -496,14 +496,10 @@ def list_bridge(d1):
 	retval=[]
 	bridge1=[]
 	for i in vm_list:
-		for i in d1['vm'][i]['interfaces'].values():
-			if isinstance(i,str):
-				if i != 'external':
-					if i not in bridge1:
-						bridge1.append(i)
-			elif isinstance(i,list):
-				if i[0] not in bridge1:
-					bridge1.append(i[0])
+		for j in d1['vm'][i]['interfaces'].keys():
+			if d1['vm'][i]['interfaces'][j]['bridge'] != 'external':
+				if d1['vm'][i]['interfaces'][j]['bridge'] not in bridge1:
+					bridge1.append(d1['vm'][i]['interfaces'][j]['bridge'])
 	for i in bridge1:
 		retval.append('  bridge "' + i + '"{};')
 	retval.append('  bridge "reserved_bridge" {};')
@@ -538,13 +534,13 @@ def make_config_generic_pc(d1,i):
 	retval.append('   ncpus ' + str(param1.vm_type[d1['vm'][i]['type']]['ncpus']) + ';')
 	retval.append('   memory ' + str(param1.vm_type[d1['vm'][i]['type']]['memory']) + ';')
 	for j in d1['vm'][i]['interfaces'].keys():
-		retval.append('   interface "' +  j + '" { bridge "' + get_bridge_name(d1['vm'][i]['interfaces'][j]) + '";};')
+		retval.append('   interface "' +  j + '" { bridge "' + d1['vm'][i]['interfaces'][j]['bridge'] + '";};')
 	retval.append('   install "' + config_dir + "hostname." + i + '" "/etc/hostname";')
 	
 	if d1['vm'][i]['os'] == 'centos':
 		retval.append('   install "' + config_dir + "hosts" + '" "/etc/hosts";')
 		for j in d1['vm'][i]['interfaces'].keys():
-			if isinstance(d1['vm'][i]['interfaces'][j],list):
+			if 'ipv4' in d1['vm'][i]['interfaces'][j]:
 				retval.append('   install "' + config_dir + "ifcfg-" + change_intf(j) + '.' + i + '" "/etc/sysconfig/network-scripts/ifcfg-' + change_intf(j) +  '";')
 	elif d1['vm'][i]['os'] == 'ubuntu':
 		retval.append('   install "' + config_dir + "hosts" + '" "/etc/hosts";')
@@ -561,12 +557,13 @@ def make_gw_config(d1,i):
 	retval.append('   install "' + config_dir + 'rc.local.gw" "/etc/rc.d/rc.local";' )
 	retval.append('};')
 	return retval
+
 def make_pc_config(d1,i):
 	retval=[]
 	# config_dir=param1.home_dir + d1['name'] + "/"
 	config_dir=param1.home_dir + d1['vmm_pod']['user'] + '/' + d1['name'] + "/"
 	retval.extend(make_config_generic_pc(d1,i))
-	retval.append('   install "' + config_dir + 'resolv.conf" "/etc/resolv.conf";' )
+	# retval.append('   install "' + config_dir + 'resolv.conf" "/etc/resolv.conf";' )
 	retval.append('};')
 	return retval
 
@@ -577,8 +574,8 @@ def make_junos_config(d1,i):
 		retval=make_vmx_config(d1,i)
 	elif d1['vm'][i]['os']=='vqfx':
 		retval=make_vqfx_config(d1,i)
-	elif d1['vm'][i]['os']=='vsrx':
-		retval=make_vsrx_config(d1,i)
+	# elif d1['vm'][i]['os']=='vsrx':
+		# retval=make_vsrx_config(d1,i)
 	return retval
 
 def vmx_get_intf(d1,i):
@@ -586,7 +583,7 @@ def vmx_get_intf(d1,i):
 	intf = d1['vm'][i]['interfaces']
 	for j in intf.keys():
 		if 'ge' in j:
-			retval.append("            VMX_CONNECT(GE("+ j.split('-')[1].replace('/',',') + "), " + d1['vm'][i]['interfaces'][j] + ")")
+			retval.append("            VMX_CONNECT(GE("+ j.split('-')[1].replace('/',',') + "), " + d1['vm'][i]['interfaces'][j]['bridge'] + ")")
 	return retval
 
 def make_vmx_config(d1,i):
@@ -594,15 +591,16 @@ def make_vmx_config(d1,i):
 	config_dir=param1.home_dir + d1['vmm_pod']['user'] + '/' + d1['name'] + "/"
 	# print("make config for VMX ",i)
 	# getting the management interface bridge
-	fxp=d1['vm'][i]['interfaces']['fxp0']
-	if not isinstance(fxp,list):
+	# fxp=d1['vm'][i]['interfaces']['fxp0']
+	# if 'ipv4' no in not isinstance(fxp,list):
+	if 'ipv4' not in d1['vm'][i]['interfaces']['fxp0'].keys():
 		print("where is the ip address ? ")
 		exit
 	else:
 		# ip_mgmt=d1['vm'][i]['interfaces']['fxp0'][1]
 		retval.append("   ")
 		retval.append("   #undef EM_IPADDR")
-		retval.append("   #define EM_IPADDR interface \"em0\" { bridge \"" + d1['vm'][i]['interfaces']['fxp0'][0] + "\";};")
+		retval.append("   #define EM_IPADDR interface \"em0\" { bridge \"" + d1['vm'][i]['interfaces']['fxp0']['bridge'] + "\";};")
 		retval.append("   #define VMX_CHASSIS_I2CID 21")
 		retval.append("   #define VMX_CHASSIS_NAME " + i)
 		retval.append("   VMX_CHASSIS_START() ")
@@ -631,7 +629,8 @@ def make_vqfx_config(d1,i):
 	retval.append('      setvar "boot_noveriexec" "YES";')
 	retval.append('      setvar "qemu_args" "-smbios type=1,product=QFX10K-11";')
 	retval.append("      install \"" + config_dir + i + ".conf\" \"/root/junos.base.conf\";")
-	mgmt_bridge=get_bridge_name(d1['vm'][i]['interfaces']['em0'])
+	# mgmt_bridge=get_bridge_name(d1['vm'][i]['interfaces']['em0'])
+	mgmt_bridge=d1['vm'][i]['interfaces']['em0']['bridge']
 	retval.append('      interface "em0" { bridge "' + mgmt_bridge + '"; };')
 	retval.append('      interface "em1" { bridge "' + i + "INT" + '"; ipaddr "169.254.0.2"; };')
 	retval.append('      interface "em2" { bridge "reserved_bridge"; };')
@@ -642,7 +641,8 @@ def make_vqfx_config(d1,i):
 	intf_list.sort()
 	for j in intf_list:
 		intf_name = "em" + str(int(j.split("/")[2]) + 3)
-		retval.append('      interface "' +  intf_name + '" { bridge "' + get_bridge_name(d1['vm'][i]['interfaces'][j]) + '";};')
+		# retval.append('      interface "' +  intf_name + '" { bridge "' + get_bridge_name(d1['vm'][i]['interfaces'][j]) + '";};')
+		retval.append('      interface "' +  intf_name + '" { bridge "' + d1['vm'][i]['interfaces'][j]['bridge'] + '";};')
 	retval.append('   };')
 
 	# creating config for COSIM of VQFX

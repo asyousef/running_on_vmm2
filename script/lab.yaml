@@ -1,77 +1,116 @@
 ---
-name: dvmx
+name: lab1
 vmm_pod:
     server: q-pod13-vmm.englab.juniper.net
-    user: <your_user>
-    password: <your_password>
-    ssh_key:
+    user: irzan
     image:
-        centos: centos7.6.img
+        centos: centos300g.img
         ubuntu: ubuntu160406.img
-        vmx_re: vmx-19.3R1.8/junos-vmx-x86-64-19.3R1.8.vmdk
-        vmx_mpc: vmx-19.3R1.8/vFPC-20190819.vmdk
-        vqfx_re: vqfx/jinstall-vqfx-10-f-17.3R3-S2.2.vmdk
-        vqfx_cosim: vqfx/cosim-2018-02-12.vmdk
-        evo_re:
-        evo_cosim:
+        vmx_re: vmx-19.4R1.10/junos-vmx-x86-64-19.4R1.10.vmdk
+        vmx_mpc: vmx-19.4R1.10/vFPC-20191114.img
+        vqfx_re: vqfx/jinstall-vqfx-10-f-19.4R1.10.vmdk
+        vqfx_cosim: vqfx/vqfx-19.4R1-2019010209-pfe-qemu.vmdk
     junos_login:
         login: admin
         password: pass01
+        ssh_key: "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQC0RmW5w2z175ub+zIw8pqqDN7y2+62hwwDn/Qoie1wDTHP90dYJXUHQPB/PPoSXTLhJjMFM/iDmZLzkPrCNORo9XoGNNvKMSh5vEvbO8d35YA3b4g0C0oLCjfFsY1hfXzNTwxWcvP0YoYY1SIg7zgiSg4CaWTAhbkPqmC7Y4nwkWu+MVT+Lg+2m45gR4Mi1ZPaGtm+c2bxd9fsgch3YiKSnM24j5v4jaHDIMEnVO3NGH68Q364yvJ+9dScch4EDxSQuD2Y0Xdnl6LiqhLKILAR9kzTqJSyc3pq1DvxKnrYDI1gsyphXDgnw040UBOoOUrabsJcps7bWjjN4kjKxmGt irzan@irzan-mbp"
 vm:
     gw:
         type: gw
         os: centos
         interfaces:
-          em0: external
-          em1: [mgmt,172.16.10.1/24]
-          em2: [cluster1,172.16.11.1/24]
-    pc1:
-        type: pcsmall
-        os: ubuntu
-        interfaces:
-          em0: [mgmt,172.16.10.11/24,172.16.10.1]
-          em1: lan1a
-          em2: lan1b
-    pc2:
-        type: pcsmall
-        os: centos 
-        interfaces:
-          em0: [mgmt,172.16.10.12/24,172.16.10.1]
-          em1: lan2a
-          em2: lan2b
+          em0:
+            bridge: external
+          em1:
+            bridge: vmx1ge0
+            ipv4: 172.16.10.0/31
+            mtu: 9000
+          em2:
+            bridge: vmx2ge0
+            ipv4: 172.16.10.2/31
+            mtu: 9000
+          em3:
+            bridge: mgmt
+            ipv4: 172.16.11.1/24
     vmx1:
         type: junos
         os: vmx
         interfaces:
-          fxp0: [mgmt,172.16.10.21/24]
-          ge-0/0/0: lan1a
-          ge-0/0/1: lan1b
-          ge-0/0/2: wan1
-          ge-0/0/3: wan2
-          ge-0/0/4: lan3a
-          ge-0/0/5: lan4a
+          fxp0:
+            bridge: mgmt
+            ipv4: 172.16.11.11/24
+          ge-0/0/0:
+            bridge: vmx1ge0
+          ge-0/0/1:
+            bridge: vmx1ge1
+          ge-0/0/2:
+            bridge: vmx1vmx2
+          ge-0/0/3:
+            bridge: vmx1qfx1
     vmx2:
         type: junos
         os: vmx
         interfaces:
-          fxp0: [mgmt,172.16.10.22/24]
-          ge-0/0/0: lan1a
-          ge-0/0/1: lan1b
-          ge-0/0/2: wan1
-          ge-0/0/3: wan2
-          ge-0/0/4: lan3b
-          ge-0/0/5: lan4b
+          fxp0:
+            bridge: mgmt
+            ipv4: 172.16.11.12/24
+          ge-0/0/0:
+            bridge: vmx2ge0
+          ge-0/0/1:
+            bridge: vmx2ge1
+          ge-0/0/2:
+            bridge: vmx1vmx2
+          ge-0/0/3:
+            bridge: vmx2qfx1
     vqfx1:
         type: junos
         os: vqfx
         interfaces:
-          em0: [mgmt,172.16.10.23/24]
-          xe-0/0/0: lan3a
-          xe-0/0/1: lan3b
-    vqfx2:
-        type: junos
-        os: vqfx
+          em0:
+            bridge: mgmt
+            ipv4: 172.16.11.13/24
+          xe-0/0/0:
+            bridge: vmx1qfx1
+          xe-0/0/1:
+            bridge: vmx2qfx1
+          xe-0/0/2:
+            bridge: vqfx1xe2
+    pc1:
+        type: pcsmall 
+        os: centos
         interfaces:
-          em0: [mgmt,172.16.10.24/24]
-          xe-0/0/0: lan4a
-          xe-0/0/1: lan4b
+          em0:
+            bridge: mgmt 
+            ipv4: 172.16.11.21/24
+          em1:
+            bridge: vmx1ge1
+            ipv4: 172.16.21.10/24
+            gateway4: 172.16.21.1
+            mtu: 9000
+          em2:
+            bridge: pc1pc2
+    pc2:
+        type: pcsmall 
+        os: ubuntu
+        interfaces:
+          em0:
+            bridge: mgmt 
+            ipv4: 172.16.11.22/24
+          em1:
+            bridge: vmx2ge1
+            ipv4: 172.16.22.10/24
+            gateway4: 172.16.22.1
+            mtu: 9000
+          em2:
+            bridge: pc1pc2
+    pc3:
+        type: pcsmall 
+        os: centos
+        interfaces:
+          em0:
+            bridge: mgmt 
+            ipv4: 172.16.11.23/24
+          em1:
+            bridge: vqfx1xe2
+            ipv4: 172.16.23.10/24
+            gateway4: 172.16.23.1

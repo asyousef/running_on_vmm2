@@ -61,13 +61,14 @@ There are different arguments required by this script
 - argument `get_serial` :  to get serial console information of the active VMs in the VMM
 
 ## Caution 
+- to access the VMM pod, it requires Juniper Unix account and it use passwordless SSH access (it uses ssh key)
 - when the script is used to start the topology, any existing running topology will be stopped and unbound. Please backup the existing topology if needed.
 - this script will need a GW which will be assigned with IP address from juniper's VMM lab. The rest of the VMs (devices), their interfaces management will be connected to virtual network behind the GW.
 - to access the other devices (other than GW), VM GW can be used as jump host, or VM GW can be configured as VPN server using [wireguard](https://www.wireguard.com/install/) or openvpn
  
 ## How to run the script (Step by step)
-- **[Running simple topology](https://github.com/m1r24n/simple/README.md)**
-- **[openstack + Contrail Lab](https://github.com/m1r24n/contrail/README.md)**
-- **[kubernetes + contrail  Lab](https://github.com/m1r24n/k8s_contrail/README.md)**
-- **[Healthbot + NS  Lab](https://github.com/m1r24n/HB_NS/README.md)**
+- **[Running simple topology](https://github.com/m1r24n/simple_on_vmm/README.md)**
+- **[openstack + Contrail Lab](https://github.com/m1r24n/contrail_on_vmm/README.md)**
+- **[kubernetes + contrail Lab](https://github.com/m1r24n/k8s_contrail_on_vmm/README.md)**
+- **[Healthbot + NS Lab](https://github.com/m1r24n/HB_NS_on_vmm/README.md)**
 

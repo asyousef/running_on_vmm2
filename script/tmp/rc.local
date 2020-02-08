@@ -1,0 +1,9 @@
+#!/bin/bash
+touch /var/lock/subsys/local
+systemctl stop firewalld
+systemctl disable firewalld
+echo "#!/bin/bash" > /tmp/rc.local
+echo "touch /var/lock/subsys/local" >> /tmp/rc.local
+cat /tmp/rc.local > /etc/rc.d/rc.local
+rm -f /tmp/rc.local
+chmod +x /etc/rc.d/rc.local

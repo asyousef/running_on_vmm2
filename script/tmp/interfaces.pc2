@@ -1,0 +1,13 @@
+auto lo
+iface lo inet loopback
+auto eth0
+iface eth0 inet static
+    address 172.16.11.22
+    netmask 255.255.255.0
+auto eth1
+iface eth1 inet static
+    address 172.16.22.10
+    netmask 255.255.255.0
+	  mtu 9000
+   gateway 172.16.22.1
+   dns-nameservers 10.49.0.4 10.49.0.37 
