@@ -71,4 +71,5 @@ There are different arguments required by this script
 - **[openstack + Contrail Lab](https://github.com/m1r24n/openstack_contrail_on_vmm)**
 - **[kubernetes + contrail Lab](https://github.com/m1r24n/k8s_contrail_on_vmm)**
 - **[Healthbot + NS Lab](https://github.com/m1r24n/HB_NS_on_vmm)**
+- **[virtual BNG lab](git remote add origin https://github.com/m1r24n/vbng_on_vmm)**
 
