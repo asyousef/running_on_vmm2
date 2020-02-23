@@ -185,7 +185,7 @@ def upload(d1):
 			vm_os_d1.append(d1['vm'][i]['os'])
 	# print("vm_os_d1 ",vm_os_d1)
 	for i in vm_os_d1:
-		if i=='vmx':
+		if i=='vmx' or i=='mx960' or i=='mx480' or i=='mx240':
 			str1='#define VMX_DISK0  basedisk "' + home_dir + d1['vmm_pod']['image']['vmx_re'] + '";'
 			lab_conf.append(str1)
 			str1='#define VMX_DISK1  basedisk "' + home_dir + d1['vmm_pod']['image']['vmx_mpc'] + '";'
@@ -201,6 +201,12 @@ def upload(d1):
 		elif i=='ubuntu':
 			str1='#define UBUNTUDISK basedisk "' + home_dir + d1['vmm_pod']['image']['ubuntu'] + '";'
 			lab_conf.append(str1)
+		elif i=='vsrx':
+			str1='#define VSRXDISK basedisk "' + home_dir + d1['vmm_pod']['image']['vsrx'] + '";'
+			lab_conf.append(str1)
+#		elif i=='wrt':
+#			str1='#define WRTDISK basedisk "' + home_dir + d1['vmm_pod']['image']['wrt'] + '";'
+#			lab_conf.append(str1)
 		# print("everything is ok")
 	str1='config "' +d1['name'] + '"{'
 	lab_conf.append(str1)
@@ -216,6 +222,8 @@ def upload(d1):
 			lab_conf.extend(make_pc_config(d1,i))
 		elif d1['vm'][i]['type'] == 'junos':
 			lab_conf.extend(make_junos_config(d1,i))
+#		elif d1['vm'][i]['type'] == 'wrt':
+#			lab_conf.extend(make_wrt_config(d1,i))
 	lab_conf.append('};')
 
 	if os.path.exists(param1.tmp_dir):
@@ -263,7 +271,7 @@ def upload_file_to_server(d1):
 def write_junos_config(d1):
 	for i in d1['vm'].keys():
 		if d1['vm'][i]['type'] == 'junos':
-			if d1['vm'][i]['os'] == 'vmx':
+			if d1['vm'][i]['os'] == 'vmx' or d1['vm'][i]['os'] == 'mx960' or d1['vm'][i]['os'] == 'mx480' or d1['vm'][i]['os'] == 'mx240':
 				write_vmx_config(d1,i)
 			elif d1['vm'][i]['os'] == 'vqfx':
 				write_vqfx_config(d1,i)
@@ -409,7 +417,119 @@ vlans {
 
 def write_vsrx_config(d1,i):
 	print("creating vsrx config ",i)
-	print("not yet implemented")
+	line1=[]
+	line1.append("system {")
+	line1.append("   host-name " + i + ";")
+	line1.append("   root-authentication {")
+	line1.append("      encrypted-password \"" +  md5_crypt.hash(d1['vmm_pod']['junos_login']['password'])+ "\";")
+	line1.append("   }")
+	line1.append("   login {")
+	line1.append("      user " + d1['vmm_pod']['junos_login']['login']+ " {")
+	line1.append("         class super-user;")
+	line1.append("         authentication {")
+	line1.append("            encrypted-password \"" + md5_crypt.hash(d1['vmm_pod']['junos_login']['password']) + "\";")
+	if 'ssh_key' in d1['vmm_pod']['junos_login'].keys():
+		line1.append("            ssh-rsa \"" + d1['vmm_pod']['junos_login']['ssh_key'] + "\";")
+	line1.append("         }")
+	line1.append("      }")
+	line1.append("   }")
+	line1.append("""   services {
+        ssh;
+        netconf {
+            ssh;
+        }
+				web-management {
+            http {
+                interface fxp0.0;
+            }
+            https {
+                system-generated-certificate;
+                interface fxp0.0;
+            }
+        }
+    }
+    syslog {
+        user * {
+            any emergency;
+        }
+        file messages {
+            any notice;
+            authorization info;
+        }
+        file interactive-commands {
+            interactive-commands any;
+        }
+    }
+}
+""")
+	line1.append("""interfaces {
+   fxp0 {
+      unit 0 {
+         family inet {
+             address %s;
+         }
+      }
+    }
+}""" % (d1['vm'][i]['interfaces']['fxp0']['ipv4']) )
+	line1.append("""security {
+		screen {
+        ids-option untrust-screen {
+            icmp {
+                ping-death;
+            }
+            ip {
+                source-route-option;
+                tear-drop;
+            }
+            tcp {
+                syn-flood {
+                    alarm-threshold 1024;
+                    attack-threshold 200;
+                    source-threshold 1024;
+                    destination-threshold 2048;
+                    timeout 20;
+                }
+                land;
+            }
+        }
+    }
+		policies {
+				from-zone trust to-zone trust {
+            policy default-permit {
+                match {
+                    source-address any;
+                    destination-address any;
+                    application any;
+                }
+                then {
+                    permit;
+                }
+            }
+        }
+				from-zone trust to-zone untrust {
+            policy default-permit {
+                match {
+                    source-address any;
+                    destination-address any;
+                    application any;
+                }
+                then {
+                    permit;
+                }
+            }
+        }
+		}
+		zones {
+			security-zone trust {
+            tcp-rst;
+        }
+      security-zone untrust {
+            screen untrust-screen;
+        }
+		}
+	}""")
+	f1=param1.tmp_dir + i + ".conf"
+	write_to_file(f1,line1)
 
 
 def write_pc_config_to_file(d1):
@@ -435,8 +555,8 @@ def write_pc_config_to_file(d1):
 							line1.append('MTU=' + str(d1['vm'][i]['interfaces'][j]['mtu']))
 						if 'gateway4' in d1['vm'][i]['interfaces'][j].keys():
 							line1.append('GATEWAY=' + d1['vm'][i]['interfaces'][j]['gateway4'])
-							line1.append('DNS1= 10.49.0.4')
-							line1.append('DNS2= 10.49.0.37')
+							line1.append('DNS1=10.49.0.4')
+							line1.append('DNS2=10.49.0.37')
 							hosts_file.append(d1['vm'][i]['interfaces'][j]['ipv4'].split('/')[0] + ' ' + i)
 						f1=param1.tmp_dir + "ifcfg-" + intf + "." + i
 						write_to_file(f1,line1)
@@ -548,6 +668,20 @@ def make_config_generic_pc(d1,i):
 
 	return retval
 
+def make_config_generic_wrt(d1,i):
+	retval=[]
+	config_dir=param1.home_dir + d1['vmm_pod']['user'] + '/' + d1['name'] + "/"
+	# print("Make config for GW for vm ",i)
+	retval.append('vm "'+i+'" {')
+	retval.append('   hostname "'+i+'";')
+	retval.append('   WRTDISK')
+	retval.append('   setvar "+qemu_args" "-cpu qemu64,+vmx";')
+	retval.append('   ncpus ' + str(param1.vm_type[d1['vm'][i]['type']]['ncpus']) + ';')
+	retval.append('   memory ' + str(param1.vm_type[d1['vm'][i]['type']]['memory']) + ';')
+	for j in d1['vm'][i]['interfaces'].keys():
+		retval.append('   interface "' +  j + '" { bridge "' + d1['vm'][i]['interfaces'][j]['bridge'] + '";};')
+	return retval
+
 def make_gw_config(d1,i):
 	retval=[]
 	# config_dir=param1.home_dir + d1['name'] + "/"
@@ -567,15 +701,24 @@ def make_pc_config(d1,i):
 	retval.append('};')
 	return retval
 
+def make_wrt_config(d1,i):
+	retval=[]
+	# config_dir=param1.home_dir + d1['name'] + "/"
+	#config_dir=param1.home_dir + d1['vmm_pod']['user'] + '/' + d1['name'] + "/"
+	retval.extend(make_config_generic_wrt(d1,i))
+	# retval.append('   install "' + config_dir + 'resolv.conf" "/etc/resolv.conf";' )
+	retval.append('};')
+	return retval
+
 def make_junos_config(d1,i):
 	retval=[]
 	# print("Make config for Junos for vm ",i)
-	if d1['vm'][i]['os']=='vmx':
+	if d1['vm'][i]['os']=='vmx' or d1['vm'][i]['os']=='mx960' or d1['vm'][i]['os']=='mx480' or d1['vm'][i]['os']=='mx240':
 		retval=make_vmx_config(d1,i)
 	elif d1['vm'][i]['os']=='vqfx':
 		retval=make_vqfx_config(d1,i)
-	# elif d1['vm'][i]['os']=='vsrx':
-		# retval=make_vsrx_config(d1,i)
+	elif d1['vm'][i]['os']=='vsrx':
+		 retval=make_vsrx_config(d1,i)
 	return retval
 
 def vmx_get_intf(d1,i):
@@ -601,7 +744,14 @@ def make_vmx_config(d1,i):
 		retval.append("   ")
 		retval.append("   #undef EM_IPADDR")
 		retval.append("   #define EM_IPADDR interface \"em0\" { bridge \"" + d1['vm'][i]['interfaces']['fxp0']['bridge'] + "\";};")
-		retval.append("   #define VMX_CHASSIS_I2CID 21")
+		if d1['vm'][i]['os'] == 'vmx': 
+			retval.append("   #define VMX_CHASSIS_I2CID 161")
+		elif d1['vm'][i]['os'] == 'mx960': 
+			retval.append("   #define VMX_CHASSIS_I2CID 21")
+		elif d1['vm'][i]['os'] == 'mx480': 
+			retval.append("   #define VMX_CHASSIS_I2CID 33")
+		elif d1['vm'][i]['os'] == 'mx240': 
+			retval.append("   #define VMX_CHASSIS_I2CID 48")
 		retval.append("   #define VMX_CHASSIS_NAME " + i)
 		retval.append("   VMX_CHASSIS_START() ")
 		retval.append("      VMX_RE_START("+i+"_re,0)")
@@ -641,7 +791,6 @@ def make_vqfx_config(d1,i):
 	intf_list.sort()
 	for j in intf_list:
 		intf_name = "em" + str(int(j.split("/")[2]) + 3)
-		# retval.append('      interface "' +  intf_name + '" { bridge "' + get_bridge_name(d1['vm'][i]['interfaces'][j]) + '";};')
 		retval.append('      interface "' +  intf_name + '" { bridge "' + d1['vm'][i]['interfaces'][j]['bridge'] + '";};')
 	retval.append('   };')
 
@@ -657,10 +806,26 @@ def make_vqfx_config(d1,i):
 	retval.append('')
 	return retval
 
-def make_srx_config(d1,i):
+def make_vsrx_config(d1,i):
 	retval=[]
+	mgmt_bridge=d1['vm'][i]['interfaces']['fxp0']['bridge']
+	config_dir=param1.home_dir + d1['vmm_pod']['user'] + '/' + d1['name'] + "/"
+	intf_list=[]
 	print("make config for srx ",i)
 	retval.append('vm "'+i+'" {')
 	retval.append('   hostname "'+i+'";')
+	retval.append('      VSRXDISK')
+	retval.append('      memory 4096;')
+	retval.append('      ncpus 2;')
+	retval.append('      setvar "qemu_args" "-cpu qemu64,+vmx,+ssse3,+sse4_1,+sse4_2,+aes,+avx,+pat,+pclmulqdq,+rdtscp,+syscall,+tsc-deadline,+x2apic,+xsave";')
+	retval.append("         install \"" + config_dir + i + ".conf\" \"/root/junos.base.conf\";")
+	retval.append('      interface "vio0" { bridge "' + mgmt_bridge + '"; };')
+	for j in d1['vm'][i]['interfaces'].keys():
+		if j != "fxp0":
+			intf_list.append(j)	
+	intf_list.sort()
+	for j in intf_list:
+		intf_name = "vio" + str(int(j.split("/")[2]) + 1)
+		retval.append('      interface "' +  intf_name + '" { bridge "' + d1['vm'][i]['interfaces'][j]['bridge'] + '";};')
 	retval.append('};')
 	return retval

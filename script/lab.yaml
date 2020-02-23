@@ -1,7 +1,7 @@
 ---
 name: lab1
 vmm_pod:
-    server: q-pod13-vmm.englab.juniper.net
+    server: q-pod22-vmm.englab.juniper.net
     user: irzan
     image:
         centos: centos300g.img
@@ -34,7 +34,7 @@ vm:
             ipv4: 172.16.11.1/24
     vmx1:
         type: junos
-        os: vmx
+        os: mx960
         interfaces:
           fxp0:
             bridge: mgmt
