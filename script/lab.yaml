@@ -1,5 +1,5 @@
 ---
-name: lab1
+name: lab2
 vmm_pod:
     server: q-pod22-vmm.englab.juniper.net
     user: irzan
