@@ -11,7 +11,7 @@ vm_type={
    'wrt': {'ncpus' : 1,'memory':1024},
 }
 # vm_os=['centos','ubuntu','vmx','vqfx','vsrx','evo','mx960','mx480','mx240','wrt']
-vm_os=['centos','ubuntu','vmx','vqfx','vsrx','evo','mx960','mx480','mx240']
+vm_os=['centos','centosx','ubuntu','ubuntu1804','vmx','vqfx','vsrx','evo','mx960','mx480','mx240']
 tmp_dir="./tmp/"
 vmm_group="-g vmm-default"
 
