@@ -696,7 +696,8 @@ def write_pc_config_to_file(d1):
 							line1.append('MTU=' + str(d1['vm'][i]['interfaces'][j]['mtu']))
 						if 'gateway4' in d1['vm'][i]['interfaces'][j].keys():
 							line1.append('GATEWAY=' + d1['vm'][i]['interfaces'][j]['gateway4'])
-							line1.append('DNS1=' + d1['vm'][i]['interfaces'][j]['gateway4'])
+							if 'dns' in d1['vm'][i]['interfaces'][j].keys():
+								line1.append('DNS1=' + d1['vm'][i]['interfaces'][j]['dns'])
 							hosts_file.append(d1['vm'][i]['interfaces'][j]['ipv4'].split('/')[0] + ' ' + i)
 						f1=param1.tmp_dir + "ifcfg-" + intf + "." + i
 						write_to_file(f1,line1)
@@ -715,7 +716,8 @@ def write_pc_config_to_file(d1):
 							line1.append('	  mtu ' + str(d1['vm'][i]['interfaces'][j]['mtu']))
 						if 'gateway4' in d1['vm'][i]['interfaces'][j].keys():
 							line1.append('   gateway ' + d1['vm'][i]['interfaces'][j]['gateway4'])
-							line1.append('   dns-nameservers ' + d1['vm'][i]['interfaces'][j]['gateway4'])
+							if 'dns' in d1['vm'][i]['interfaces'][j].keys():
+								line1.append('   dns-nameservers ' + d1['vm'][i]['interfaces'][j]['dns'])
 							hosts_file.append(d1['vm'][i]['interfaces'][j]['ipv4'].split('/')[0] + ' ' + i)
 				f1=param1.tmp_dir + "interfaces." + i
 				write_to_file(f1,line1)
@@ -733,9 +735,10 @@ def write_pc_config_to_file(d1):
 							line1.append('      mtu : ' + str(d1['vm'][i]['interfaces'][j]['mtu']))
 						if 'gateway4' in d1['vm'][i]['interfaces'][j].keys():
 							line1.append('      gateway4: ' + d1['vm'][i]['interfaces'][j]['gateway4'])
-							line1.append('      nameservers:')
-							line1.append('        addresses:')
-							line1.append('           - ' + d1['vm'][i]['interfaces'][j]['gateway4'])
+							if 'dns' in d1['vm'][i]['interfaces'][j].keys():
+								line1.append('      nameservers:')
+								line1.append('        addresses:')
+								line1.append('           - ' + d1['vm'][i]['interfaces'][j]['dns'])
 							hosts_file.append(d1['vm'][i]['interfaces'][j]['ipv4'].split('/')[0] + ' ' + i)
 				f1=param1.tmp_dir + "interfaces." + i
 				write_to_file(f1,line1)
