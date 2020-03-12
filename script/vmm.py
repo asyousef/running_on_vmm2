@@ -34,6 +34,9 @@ if config1:
 		elif config1['cmd'] == 'get_ip':
 			print('getting IP for vm')
 			lib1.get_ip(d1,config1['vm'])
+		elif config1['cmd'] == 'config':
+			print('config VM ubuntu 1804')
+			lib1.config_ubuntu1804(d1)
 		else:
 			print("wrong argument")
 	except FileNotFoundError:

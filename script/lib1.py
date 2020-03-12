@@ -8,10 +8,110 @@ import os
 import param1
 import shutil
 import paramiko
+import pexpect
+import time
  
 # from jnpr.junos import Device
 # from jnpr.junos.utils.config import Config
 from passlib.hash import md5_crypt
+def check_ubuntu1804(d1):
+	vm_list=d1['vm'].keys()
+	vm_exist=[]
+	for i in d1['vm'].keys():
+		if d1['vm'][i]['os']=='ubuntu1804':
+			vm_exist.append(i)
+	if vm_exist:
+		print("there is ubuntu 1804 as VM, please run \"vmm.py config\"")
+
+def upload1(gw_external_ip,gw_internal_ip,i,d1):
+	for j in d1['vm'][i]['interfaces'].keys():
+		if d1['vm'][i]['interfaces'][j]['bridge']=='mgmt':
+				target_addr=d1['vm'][i]['interfaces'][j]['ipv4'].split("/")[0]
+	# print("GW external IP ",gw_external_ip)
+	# print("GW internal IP ",gw_internal_ip)
+	# print("Target ",target_addr)
+	gw=paramiko.SSHClient()
+	gw.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+	gw.connect(gw_external_ip,username='centos')
+	gw_transport=gw.get_transport()
+	src_addr = (gw_internal_ip, 22)
+	dest_addr = (target_addr, 22)
+	gw_channel = gw_transport.open_channel("direct-tcpip", dest_addr, src_addr)
+	target=paramiko.SSHClient()
+	target.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+	target.connect(target_addr, username='ubuntu',sock=gw_channel)
+	scp1=target.open_sftp()
+	scp1.put("./tmp/interfaces." + i,"interfaces")
+	scp1.close()
+	target.close()
+	gw.close()
+
+
+def get_private_ip_gw(d1):
+	for i in d1['vm'].keys():
+		if d1['vm'][i]['type']=="gw":
+			for j in d1['vm'][i]['interfaces'].keys():
+				if d1['vm'][i]['interfaces'][j]['bridge']=="mgmt":
+					retval= d1['vm'][i]['interfaces'][j]['ipv4'].split("/")[0]
+	return retval
+
+def config_ubuntu1804(d1):
+	print("upload configuration into VM ubuntu 1804")
+	vm_list=d1['vm'].keys()
+	vm_exist=[]
+	for i in d1['vm'].keys():
+		if d1['vm'][i]['os']=='ubuntu1804':
+			vm_exist.append(i)
+	if vm_exist:
+		gw_external_ip=get_ip_vm(d1,'gw')
+		gw_internal_ip=get_private_ip_gw(d1)
+		for i in vm_exist:
+			print("setting config for  ",i)
+			serial_vm=get_serial_vm(d1,i)
+			host1,port1=serial_vm.split(":")
+			cmd1="telnet " + host1 + " " + port1
+			ip_addr=d1['vm'][i]['interfaces']['em0']['ipv4']
+			cmd2=['sudo ip addr add dev eth0 ' + ip_addr]
+			cmd2.append('sudo ip link set dev eth0 up')
+			cmd2.append("rm -rf ~/.ssh")
+			cmd2.append("mkdir ~/.ssh")
+			cmd2.append("echo \"" + d1['vmm_pod']['junos_login']['ssh_key'] + " \" > ~/.ssh/authorized_keys")
+			# cmd2.append("sudo echo \" + i  + "\" 
+			cmd2.append("echo " + i + " > ~/hostname")
+			cmd2.append("sudo mv ~/hostname /etc/hostname");
+			p1=pexpect.spawn(cmd1)
+			p1.sendline("ubuntu")
+			p1.expect("Password:")
+			p1.sendline("pass01")
+			p1.expect("$")
+			# print("setting ip")
+			for j in cmd2:
+				p1.sendline(j)
+				p1.expect("$")
+			p1.sendline("exit")
+			p1.expect("login:")
+			# print("done")
+			p1.close()
+			upload1(gw_external_ip,gw_internal_ip,i,d1)
+			cmd2=["sudo rm /etc/netplan/*"]
+			cmd2.append("sudo cp ~/interfaces /etc/netplan/50-config.yaml")
+			# cmd2.append("sudo reboot")
+			p1=pexpect.spawn(cmd1)
+			p1.sendline("ubuntu")
+			p1.expect("Password:")
+			p1.sendline("pass01")
+			p1.expect("$")
+			for j in cmd2:
+				p1.sendline(j)
+				p1.expect("$")
+			p1.sendline("sudo reboot")
+			time.sleep(1)
+			# p1.sendline("exit")
+			# p1.expect("login:")
+			# print("done")
+			p1.close()
+	else:
+		print("no ubuntu1804 in the topology")
 
 def print_syntax():
 	print("usage : vmm.py [-c config_file] <command>")
@@ -27,7 +127,7 @@ def print_syntax():
 
 def check_argv(argv):
 	retval={}
-	cmd_list=['upload','start','stop','get_serial','get_vga','get_ip','list']
+	cmd_list=['upload','start','stop','get_serial','get_vga','get_ip','list','config']
 	if len(argv) == 1:
 		print_syntax()
 	else:
@@ -140,14 +240,26 @@ def get_serial(d1):
 	print("serial port of VM")
 	cmd1="vmm list"
 	s1,s2,s3=ssh.exec_command(cmd1)
+	# ssh.close()
 	vm_list=[]
 	for i in s2.readlines():
 		vm_list.append(i.rstrip().split()[0])	
+	print("vm list", vm_list)
 	for i in vm_list:
-		cmd1="vmm args " + i + " | grep \"serial \""
-		s1,s2,s3=ssh.exec_command(cmd1)
-		for j in s2.readlines():
-			print("serial of " + i + " : " + j.rstrip().split()[1])
+		print("serial of " + i + " : " + get_serial_vm(d1,i))
+
+
+def get_serial_vm(d1,i):
+	ssh=paramiko.SSHClient()
+	ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+	ssh.connect(hostname=d1['vmm_pod']['server'],username=d1['vmm_pod']['user'])
+	cmd1="vmm args " + i + " | grep \"serial \""
+	s1,s2,s3=ssh.exec_command(cmd1)
+	j=s2.readlines()[0]
+	# print("s2.readlines ",j)
+	# for j in s2.readlines():
+	# return '0'
+	return j.rstrip().split()[1]
 
 def list_vm(d1):
 	ssh=paramiko.SSHClient()
@@ -199,7 +311,8 @@ def start(d1):
 	for i in s2.readlines():
 		print(i.rstrip())
 	write_ssh_config(d1)
-		
+	check_ubuntu1804(d1)
+
 def upload(d1):
 # creating lab.conf
 	if not checking_config_syntax(d1):
@@ -213,38 +326,56 @@ def upload(d1):
 	vm_os_d1=[]
 	for i in d1['vm'].keys():
 		# print(i,d1['vm'][i]['os'])
-		if d1['vm'][i]['os'] not in vm_os_d1:
-			vm_os_d1.append(d1['vm'][i]['os'])
+		if 'disk' in d1['vm'][i].keys():
+			temp_s1=d1['vm'][i]['os'] + "_" + d1['vm'][i]['disk']	
+		else:
+			temp_s1=d1['vm'][i]['os']
+		if temp_s1 not in vm_os_d1:
+			vm_os_d1.append(temp_s1)
 	# print("vm_os_d1 ",vm_os_d1)
 	for i in vm_os_d1:
 		if i=='vmx' or i=='mx960' or i=='mx480' or i=='mx240':
+			str1="#undef VMX_DISK0"
+			lab_conf.append(str1)
 			str1='#define VMX_DISK0  basedisk "' + home_dir + d1['vmm_pod']['image']['vmx_re'] + '";'
+			lab_conf.append(str1)
+			str1="#undef VMX_DISK1"
 			lab_conf.append(str1)
 			str1='#define VMX_DISK1  basedisk "' + home_dir + d1['vmm_pod']['image']['vmx_mpc'] + '";'
 			lab_conf.append(str1)
 		elif i=='vqfx':
+			str1="#undef VQFX_RE"
+			lab_conf.append(str1)
 			str1='#define VQFX_RE  basedisk "' + home_dir + d1['vmm_pod']['image']['vqfx_re'] + '";'
+			lab_conf.append(str1)
+			str1="#undef VQFX_COSIM"
 			lab_conf.append(str1)
 			str1='#define VQFX_COSIM  basedisk "' + home_dir + d1['vmm_pod']['image']['vqfx_cosim'] + '";'
 			lab_conf.append(str1)
-		elif i=='centos':
-			str1='#define CENTOSDISK  basedisk "' + home_dir + d1['vmm_pod']['image']['centos'] + '";'
-			lab_conf.append(str1)
-		elif i=='centosx':
-			str1='#define CENTOSXDISK  basedisk "' + home_dir + d1['vmm_pod']['image']['centosx'] + '";'
-			lab_conf.append(str1)
-		elif i=='ubuntu':
-			str1='#define UBUNTUDISK basedisk "' + home_dir + d1['vmm_pod']['image']['ubuntu'] + '";'
-			lab_conf.append(str1)
-		elif i=='ubuntu1804':
-			str1='#define UBUNTU1804DISK basedisk "' + home_dir + d1['vmm_pod']['image']['ubuntu1804'] + '";'
-			lab_conf.append(str1)
 		elif i=='vsrx':
+			str1="#undef VSRXDISK"
+			lab_conf.append(str1)
 			str1='#define VSRXDISK basedisk "' + home_dir + d1['vmm_pod']['image']['vsrx'] + '";'
 			lab_conf.append(str1)
-#		elif i=='wrt':
-#			str1='#define WRTDISK basedisk "' + home_dir + d1['vmm_pod']['image']['wrt'] + '";'
-#			lab_conf.append(str1)
+		else:
+			temp_s1=i.upper() + "_DISK"
+			str1="#undef " + temp_s1
+			lab_conf.append(str1)
+			str1='#define ' + temp_s1 + ' basedisk "' + home_dir + d1['vmm_pod']['image'][i] + '";'
+			lab_conf.append(str1)
+				
+# 		elif i=='centos':
+# 			str1='#define CENTOSDISK  basedisk "' + home_dir + d1['vmm_pod']['image']['centos'] + '";'
+# 			lab_conf.append(str1)
+# 		elif i=='centosx':
+# 			str1='#define CENTOSXDISK  basedisk "' + home_dir + d1['vmm_pod']['image']['centosx'] + '";'
+# 			lab_conf.append(str1)
+# 		elif i=='ubuntu':
+# 			str1='#define UBUNTUDISK basedisk "' + home_dir + d1['vmm_pod']['image']['ubuntu'] + '";'
+# 			lab_conf.append(str1)
+# 		elif i=='ubuntu1804':
+# 			str1='#define UBUNTU1804DISK basedisk "' + home_dir + d1['vmm_pod']['image']['ubuntu1804'] + '";'
+# 			lab_conf.append(str1)
 		# print("everything is ok")
 	str1='config "' +d1['name'] + '"{'
 	lab_conf.append(str1)
@@ -260,8 +391,6 @@ def upload(d1):
 			lab_conf.extend(make_pc_config(d1,i))
 		elif d1['vm'][i]['type'] == 'junos':
 			lab_conf.extend(make_junos_config(d1,i))
-#		elif d1['vm'][i]['type'] == 'wrt':
-#			lab_conf.extend(make_wrt_config(d1,i))
 	lab_conf.append('};')
 
 	if os.path.exists(param1.tmp_dir):
@@ -675,18 +804,16 @@ def write_pc_config_to_file(d1):
 	for i in d1['vm'].keys():
 		if d1['vm'][i]['type'] != 'junos':
 			f1=param1.tmp_dir + "hostname." + i
+			print("write_pc_config_to_file ", i)
 			write_to_file(f1,[i])
 	for i in d1['vm'].keys():
 		if d1['vm'][i]['type'] != 'junos':
-			# if d1['vm'][i]['os']=='centos' or d1['vm'][i]['os']=='centosx':
 			if 'centos' in d1['vm'][i]['os']:
 				for j in d1['vm'][i]['interfaces']:
 					line1=[]
 					if 'ipv4' in d1['vm'][i]['interfaces'][j].keys():
-						# if d1['vm'][i]['os']=='centos':
 						intf=j.replace('em','eth')
-						# elif d1['vm'][i]['os']=='centosx':
-						#	intf=j.replace('em','ens3f')
+						f1=param1.tmp_dir + "ifcfg-" + intf + "." + i
 						line1.append('NAME=' + intf)
 						line1.append('DEVICE='+intf)
 						line1.extend(['TYPE=Ethernet','BOOTPROTO=static','ONBOOT=yes'])
@@ -700,7 +827,15 @@ def write_pc_config_to_file(d1):
 								line1.append('DNS1=' + d1['vm'][i]['interfaces'][j]['dns'])
 							hosts_file.append(d1['vm'][i]['interfaces'][j]['ipv4'].split('/')[0] + ' ' + i)
 						f1=param1.tmp_dir + "ifcfg-" + intf + "." + i
-						write_to_file(f1,line1)
+					else:
+						intf=j.replace('em','eth')
+						f1=param1.tmp_dir + "ifcfg-" + intf + "." + i
+						line1.append('NAME=' + intf)
+						line1.append('DEVICE='+intf)
+						line1.extend(['TYPE=Ethernet','BOOTPROTO=manual','ONBOOT=yes'])
+						if 'mtu' in d1['vm'][i]['interfaces'][j].keys():
+							line1.append('MTU=' + str(d1['vm'][i]['interfaces'][j]['mtu']))
+					write_to_file(f1,line1)
 			elif d1['vm'][i]['os']=='ubuntu':
 				line1=[]
 				line1.append("auto lo")
@@ -719,6 +854,12 @@ def write_pc_config_to_file(d1):
 							if 'dns' in d1['vm'][i]['interfaces'][j].keys():
 								line1.append('   dns-nameservers ' + d1['vm'][i]['interfaces'][j]['dns'])
 							hosts_file.append(d1['vm'][i]['interfaces'][j]['ipv4'].split('/')[0] + ' ' + i)
+					else:
+						intf=j.replace('em','eth')
+						line1.append("auto " + intf)
+						line1.append("iface " + intf + " inet manual")
+						if 'mtu' in d1['vm'][i]['interfaces'][j].keys():
+							line1.append('	  mtu ' + str(d1['vm'][i]['interfaces'][j]['mtu']))
 				f1=param1.tmp_dir + "interfaces." + i
 				write_to_file(f1,line1)
 			elif d1['vm'][i]['os']=='ubuntu1804':
@@ -729,7 +870,7 @@ def write_pc_config_to_file(d1):
 					if 'ipv4' in d1['vm'][i]['interfaces'][j].keys():
 						intf=j.replace('em','eth')
 						line1.append("    " + intf + ":")
-						line1.append("      address:")
+						line1.append("      addresses:")
 						line1.append("        - "+ d1['vm'][i]['interfaces'][j]['ipv4'])
 						if 'mtu' in d1['vm'][i]['interfaces'][j].keys():
 							line1.append('      mtu : ' + str(d1['vm'][i]['interfaces'][j]['mtu']))
@@ -740,6 +881,12 @@ def write_pc_config_to_file(d1):
 								line1.append('        addresses:')
 								line1.append('           - ' + d1['vm'][i]['interfaces'][j]['dns'])
 							hosts_file.append(d1['vm'][i]['interfaces'][j]['ipv4'].split('/')[0] + ' ' + i)
+					else:
+						intf=j.replace('em','eth')
+						line1.append("    " + intf + ":")
+						line1.append("       dhcp4: no")
+						if 'mtu' in d1['vm'][i]['interfaces'][j].keys():
+							line1.append('       mtu : ' + str(d1['vm'][i]['interfaces'][j]['mtu']))
 				f1=param1.tmp_dir + "interfaces." + i
 				write_to_file(f1,line1)
 	write_to_file(param1.tmp_dir + "hosts",hosts_file)
@@ -809,16 +956,23 @@ def make_config_generic_pc(d1,i):
 	# print("Make config for GW for vm ",i)
 	retval.append('vm "'+i+'" {')
 	retval.append('   hostname "'+i+'";')
-	if d1['vm'][i]['os']=='centos':
-		retval.append('   CENTOSDISK')
-	elif d1['vm'][i]['os']=='centosx':
-		retval.append('   CENTOSXDISK')
-	elif d1['vm'][i]['os']=='ubuntu':
-		retval.append('   UBUNTUDISK')
-	elif d1['vm'][i]['os']=='ubuntu1804':
-		retval.append('   UBUNTU1804DISK')
+	if 'disk' in d1['vm'][i].keys():
+		temp_s1="    " + d1['vm'][i]['os'].upper() + "_" + d1['vm'][i]['disk'].upper() +  "_DISK"
+	else:
+		temp_s1="    " + d1['vm'][i]['os'].upper() +  "_DISK"
+	retval.append(temp_s1)
+
+# 	if d1['vm'][i]['os']=='centos':
+# 		retval.append('   CENTOSDISK')
+# 	elif d1['vm'][i]['os']=='centosx':
+# 		retval.append('   CENTOSXDISK')
+# 	elif d1['vm'][i]['os']=='ubuntu':
+# 		retval.append('   UBUNTUDISK')
+# 	elif d1['vm'][i]['os']=='ubuntu1804':
+# 		retval.append('   UBUNTU1804DISK')
 	# print("PC Name :",i)
 	# print("PC type :",d1['vm'][i]['type'])
+	
 	retval.append('   setvar "+qemu_args" "-cpu qemu64,+vmx";')
 	retval.append('   ncpus ' + str(param1.vm_type[d1['vm'][i]['type']]['ncpus']) + ';')
 	retval.append('   memory ' + str(param1.vm_type[d1['vm'][i]['type']]['memory']) + ';')
@@ -827,14 +981,13 @@ def make_config_generic_pc(d1,i):
 	retval.append('   install "' + config_dir + "hostname." + i + '" "/etc/hostname";')
 	
 	# if d1['vm'][i]['os'] == 'centos' or d1['vm'][i]['os'] == 'centosx':
-	if 'centos' in d1['vm'][i]['os']:
+	# if 'centos' in d1['vm'][i]['os']:
+
+	if d1['vm'][i]['os'] == 'centos':
 		retval.append('   install "' + config_dir + "hosts" + '" "/etc/hosts";')
 		for j in d1['vm'][i]['interfaces'].keys():
 			if 'ipv4' in d1['vm'][i]['interfaces'][j]:
-				# if d1['vm'][i]['os'] == 'centos':
 				retval.append('   install "' + config_dir + "ifcfg-" + change_intf(j) + '.' + i + '" "/etc/sysconfig/network-scripts/ifcfg-' + change_intf(j) +  '";')
-				# if d1['vm'][i]['os'] == 'centosx':
-				#	retval.append('   install "' + config_dir + "ifcfg-" + change_intfx(j) + '.' + i + '" "/etc/sysconfig/network-scripts/ifcfg-' + change_intfx(j) +  '";')
 	elif d1['vm'][i]['os'] == 'ubuntu':
 		retval.append('   install "' + config_dir + "hosts" + '" "/etc/hosts";')
 		retval.append('   install "' + config_dir + "interfaces." + i + '" "/etc/network/interfaces";')
@@ -843,20 +996,6 @@ def make_config_generic_pc(d1,i):
 		retval.append('   install "' + config_dir + "interfaces." + i + '" "/etc/netplan/50-cloud-init.yaml";')
 
 	return retval
-
-# def make_config_generic_wrt(d1,i):
-# 	retval=[]
-# 	config_dir=param1.home_dir + d1['vmm_pod']['user'] + '/' + d1['name'] + "/"
-# 	# print("Make config for GW for vm ",i)
-# 	retval.append('vm "'+i+'" {')
-# 	retval.append('   hostname "'+i+'";')
-# 	retval.append('   WRTDISK')
-# 	retval.append('   setvar "+qemu_args" "-cpu qemu64,+vmx";')
-# 	retval.append('   ncpus ' + str(param1.vm_type[d1['vm'][i]['type']]['ncpus']) + ';')
-# 	retval.append('   memory ' + str(param1.vm_type[d1['vm'][i]['type']]['memory']) + ';')
-# 	for j in d1['vm'][i]['interfaces'].keys():
-# 		retval.append('   interface "' +  j + '" { bridge "' + d1['vm'][i]['interfaces'][j]['bridge'] + '";};')
-# 	return retval
 
 def make_gw_config(d1,i):
 	retval=[]
@@ -871,10 +1010,9 @@ def make_gw_config(d1,i):
 
 def make_pc_config(d1,i):
 	retval=[]
-	# config_dir=param1.home_dir + d1['name'] + "/"
 	config_dir=param1.home_dir + d1['vmm_pod']['user'] + '/' + d1['name'] + "/"
 	retval.extend(make_config_generic_pc(d1,i))
-	if 'centos' in d1['vm'][i]['os']:
+	if d1['vm'][i]['os'] == 'centos':
 		retval.append('   install "' + config_dir + 'rc.local.centos" "/etc/rc.d/rc.local";' )
 	
 		retval.append('   install "' + config_dir + 'ssh_key" "/home/centos/.ssh/authorized_keys";' )
@@ -886,15 +1024,6 @@ def make_pc_config(d1,i):
 	# retval.append('   install "' + config_dir + 'resolv.conf" "/etc/resolv.conf";' )
 	retval.append('};')
 	return retval
-
-# def make_wrt_config(d1,i):
-# 	retval=[]
-# 	# config_dir=param1.home_dir + d1['name'] + "/"
-# 	#config_dir=param1.home_dir + d1['vmm_pod']['user'] + '/' + d1['name'] + "/"
-# 	retval.extend(make_config_generic_wrt(d1,i))
-# 	# retval.append('   install "' + config_dir + 'resolv.conf" "/etc/resolv.conf";' )
-# 	retval.append('};')
-# 	return retval
 
 def make_junos_config(d1,i):
 	retval=[]
